@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, make_response
 import sqlite3
 from datetime import datetime
@@ -5,13 +6,18 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import csv
 import io
+from dotenv import load_dotenv
+
+
+load_dotenv()  # Load variables from .env
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-change-this-in-production'
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY')
+app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(minutes=10)
 
 # Registration keys
-ADMIN_KEY = "ADMIN2024KEY"
-USER_KEY = "USER2024KEY"
+ADMIN_KEY = os.environ.get('ADMIN_KEY')
+USER_KEY = os.environ.get('USER_KEY')
 
 # Database setup
 def init_db():
@@ -476,4 +482,5 @@ def delete_category(category_id):
     return jsonify({'message': 'Category deleted successfully'})
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # app.run(debug=True)
+    app.run(host='0.0.0.0', port=8080)
