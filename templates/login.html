@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Finance Tracker</title>
+    <style>
+        /* New Color System (Material 3 Expressive Inspired) */
+        :root {
+            /* Primary Accent (Teal) */
+            --color-primary: #00897b;
+            --color-primary-dark: #004d40;
+            --color-primary-light: #4db6ac;
+
+            /* Light Theme */
+            --color-surface: white;
+            --color-on-surface: #333;
+            --color-on-background: #666;
+            --color-background-start: #b2ebf2; /* Light Cyan */
+            --color-background-end: #80deea;   /* Medium Cyan */
+            --color-border: #e0e0e0;
+            --color-shadow: rgba(0, 0, 0, 0.2);
+            --color-error-bg: #fee;
+            --color-error-text: #c33;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                /* Dark Theme */
+                --color-surface: #1e1e1e;
+                --color-on-surface: #e0e0e0;
+                --color-on-background: #a0a0a0;
+                --color-background-start: #004d40; /* Dark Teal */
+                --color-background-end: #00695c;   /* Medium Dark Teal */
+                --color-border: #333;
+                --color-shadow: rgba(0, 0, 0, 0.5);
+                --color-error-bg: #4e0c0c;
+                --color-error-text: #ff6e6e;
+            }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--color-background-start) 0%, var(--color-background-end) 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .auth-container {
+            background: var(--color-surface);
+            border-radius: 28px; /* Larger radius for expressive style */
+            padding: 40px;
+            box-shadow: 0 12px 24px var(--color-shadow), 0 4px 8px var(--color-shadow); /* Layered shadow */
+            width: 100%;
+            max-width: 450px;
+            animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .auth-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .auth-header h1 {
+            font-size: 2.8rem;
+            color: var(--color-on-surface);
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .auth-header p {
+            color: var(--color-on-background);
+            font-size: 1.1rem;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--color-on-background);
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 16px 12px; /* Slightly more padding */
+            border: 1px solid var(--color-border);
+            border-radius: 16px; /* Material 3 input styling */
+            font-size: 1rem;
+            background-color: var(--color-surface);
+            color: var(--color-on-surface);
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 3px rgba(0, 137, 123, 0.2);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
+            color: white;
+            border: none;
+            padding: 16px 30px;
+            border-radius: 16px; /* Consistent radius */
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.3s;
+            width: 100%;
+            font-weight: 600;
+            margin-top: 15px;
+            letter-spacing: 0.5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(0, 137, 123, 0.3);
+            opacity: 0.95;
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .error-message {
+            background: var(--color-error-bg);
+            color: var(--color-error-text);
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: none;
+            animation: shake 0.4s ease;
+            font-weight: 500;
+        }
+
+        .auth-footer {
+            text-align: center;
+            margin-top: 25px;
+            color: var(--color-on-background);
+            font-size: 0.95rem;
+        }
+
+        .auth-footer a {
+            color: var(--color-primary);
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .auth-footer a:hover {
+            text-decoration: underline;
+            color: var(--color-primary-light);
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-8px); }
+            75% { transform: translateX(8px); }
+        }
+
+        @media (max-width: 480px) {
+            .auth-container {
+                padding: 30px 20px;
+                border-radius: 20px;
+            }
+
+            .auth-header h1 {
+                font-size: 2.2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-header">
+            <h1>💰 Finance Tracker</h1>
+            <p>Login to manage your finances</p>
+        </div>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" required autocomplete="username">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn" id="submitBtn">Login</button>
+        </form>
+
+        <div class="auth-footer">
+            Don't have an account? <a href="/register">Sign up</a>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const errorMessage = document.getElementById('errorMessage');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            errorMessage.style.display = 'none';
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Logging in...';
+
+            const credentials = {
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value
+            };
+
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(credentials)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    window.location.href = data.redirect;
+                } else {
+                    errorMessage.textContent = data.error || 'Login failed';
+                    errorMessage.style.display = 'block';
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Login';
+                }
+            } catch (error) {
+                errorMessage.textContent = 'An error occurred. Please try again.';
+                errorMessage.style.display = 'block';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Login';
+            }
+        });
+    </script>
+</body>
+</html>
