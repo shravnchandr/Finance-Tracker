@@ -1,459 +1,479 @@
-import json
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, make_response
 import sqlite3
-import datetime 
-from flask import Flask, render_template, request, jsonify, session, make_response, redirect, url_for, g
+from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
-from database import get_db, init_db, init_app, get_user_id_by_username 
+from functools import wraps
+import csv
+import io
 
-# --- Configuration ---
 app = Flask(__name__)
-# IMPORTANT: In a real application, set a strong secret key for session management!
-app.secret_key = 'super_secret_dev_key_change_me_in_production'
+app.config['SECRET_KEY'] = 'your-secret-key-change-this-in-production'
 
-# --- SESSION TIMEOUT CONFIGURATION ---
-# Set the session lifetime to 10 minutes.
-# If the user doesn't access any route for this period, the session cookie will expire.
-app.permanent_session_lifetime = datetime.timedelta(minutes=10)
+# Registration keys
+ADMIN_KEY = "ADMIN2024KEY"
+USER_KEY = "USER2024KEY"
 
-# Secret Keys for Registration Restriction and Role Assignment
-ADMIN_SECRET_KEY = "finance-admin-2024" 
-STANDARD_USER_SECRET_KEY = "read-only-guest-2024"
+# Database setup
+def init_db():
+    conn = sqlite3.connect('expenses.db')
+    c = conn.cursor()
+    
+    # Users table with role
+    c.execute('''CREATE TABLE IF NOT EXISTS users
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  username TEXT UNIQUE NOT NULL,
+                  password TEXT NOT NULL,
+                  role TEXT NOT NULL,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    
+    # Transactions table (expenses and income)
+    c.execute('''CREATE TABLE IF NOT EXISTS transactions
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_id INTEGER NOT NULL,
+                  username TEXT NOT NULL,
+                  amount REAL NOT NULL,
+                  type TEXT NOT NULL,
+                  category TEXT NOT NULL,
+                  description TEXT,
+                  date TEXT NOT NULL,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  FOREIGN KEY (user_id) REFERENCES users (id))''')
+    
+    # Categories table
+    c.execute('''CREATE TABLE IF NOT EXISTS categories
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  name TEXT UNIQUE NOT NULL,
+                  type TEXT NOT NULL,
+                  icon TEXT,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    
+    # Insert default categories if table is empty
+    c.execute('SELECT COUNT(*) FROM categories')
+    if c.fetchone()[0] == 0:
+        default_categories = [
+            ('🍔 Food & Dining', 'expense', '🍔'),
+            ('🚗 Transport', 'expense', '🚗'),
+            ('🛍️ Shopping', 'expense', '🛍️'),
+            ('🎬 Entertainment', 'expense', '🎬'),
+            ('💡 Bills & Utilities', 'expense', '💡'),
+            ('🏥 Healthcare', 'expense', '🏥'),
+            ('🎓 Education', 'expense', '🎓'),
+            ('🏠 Rent', 'expense', '🏠'),
+            ('📦 Other', 'expense', '📦'),
+            ('💼 Salary', 'income', '💼'),
+            ('💰 Business', 'income', '💰'),
+            ('📈 Investment', 'income', '📈'),
+            ('🎁 Gift', 'income', '🎁'),
+            ('💵 Freelance', 'income', '💵'),
+            ('🏆 Bonus', 'income', '🏆'),
+        ]
+        c.executemany('INSERT INTO categories (name, type, icon) VALUES (?, ?, ?)', 
+                      default_categories)
+    
+    conn.commit()
+    conn.close()
 
-# Initialize the database connection teardown
-init_app(app)
+init_db()
 
-# --- Utility Functions ---
+# Database helper
+def get_db():
+    conn = sqlite3.connect('expenses.db')
+    conn.row_factory = sqlite3.Row
+    return conn
 
-def get_user_id():
-    """Helper to retrieve the ID of the current logged-in user."""
-    if 'username' not in session:
-        return None
-    return get_user_id_by_username(session['username'])
+# Login required decorator
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
-def check_permission(required_role):
-    """Checks if the logged-in user has the required role."""
-    return session.get('role') == required_role
+# Admin required decorator
+def admin_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        if session.get('role') != 'admin':
+            return jsonify({'error': 'Admin access required'}), 403
+        return f(*args, **kwargs)
+    return decorated_function
 
-# --- Flask Routes ---
+# Authentication routes
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        data = request.json
+        username = data.get('username')
+        password = data.get('password')
+        reg_key = data.get('registration_key')
+        
+        if not username or not password or not reg_key:
+            return jsonify({'error': 'All fields are required'}), 400
+        
+        # Check registration key and determine role
+        if reg_key == ADMIN_KEY:
+            role = 'admin'
+        elif reg_key == USER_KEY:
+            role = 'user'
+        else:
+            return jsonify({'error': 'Invalid registration key'}), 400
+        
+        conn = get_db()
+        c = conn.cursor()
+        
+        # Check if user exists
+        c.execute('SELECT id FROM users WHERE username = ?', (username,))
+        if c.fetchone():
+            conn.close()
+            return jsonify({'error': 'Username already exists'}), 400
+        
+        # Create user
+        hashed_password = generate_password_hash(password)
+        c.execute('INSERT INTO users (username, password, role) VALUES (?, ?, ?)',
+                  (username, hashed_password, role))
+        conn.commit()
+        user_id = c.lastrowid
+        conn.close()
+        
+        session['user_id'] = user_id
+        session['username'] = username
+        session['role'] = role
+        
+        return jsonify({'message': 'Registration successful', 'redirect': '/'}), 201
+    
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        data = request.json
+        username = data.get('username')
+        password = data.get('password')
+        
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT * FROM users WHERE username = ?', (username,))
+        user = c.fetchone()
+        conn.close()
+        
+        if user and check_password_hash(user['password'], password):
+            session['user_id'] = user['id']
+            session['username'] = user['username']
+            session['role'] = user['role']
+            return jsonify({'message': 'Login successful', 'redirect': '/'}), 200
+        
+        return jsonify({'error': 'Invalid credentials'}), 401
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
 
 @app.route('/')
+@login_required
 def index():
-    """Renders the authentication page using the template."""
-    logged_in_user = session.get('username')
-    logged_in_role = session.get('role')
+    role = session.get('role')
+    username = session.get('username')
+    return render_template('index.html', username=username, role=role)
+
+# Transaction routes
+@app.route('/api/transactions', methods=['GET'])
+@login_required
+def get_transactions():
+    user_id = session['user_id']
+    role = session['role']
+    conn = get_db()
+    c = conn.cursor()
     
-    # Passes user and role to the template
-    return render_template('index.html', logged_in_user=logged_in_user, logged_in_role=logged_in_role)
-
-@app.route('/register', methods=['POST'])
-def register():
-    """Handles new user registration."""
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-    secret_key = data.get('secret_key')
-
-    if not all([username, password, secret_key]):
-        return jsonify({"message": "Missing username, password, or secret key"}), 400
-
-    assigned_role = None
-    if secret_key == ADMIN_SECRET_KEY:
-        assigned_role = 'admin'
-    elif secret_key == STANDARD_USER_SECRET_KEY:
-        assigned_role = 'standard'
+    # Get filter parameters
+    trans_type = request.args.get('type')
+    category = request.args.get('category')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    # Admin sees all transactions, users see only their own
+    if role == 'admin':
+        query = 'SELECT * FROM transactions WHERE 1=1'
+        params = []
     else:
-        return jsonify({"message": "Invalid secret key. You are not authorized to create an account."}), 403
-
-    db = get_db()
+        query = 'SELECT * FROM transactions WHERE user_id = ?'
+        params = [user_id]
     
-    if db.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone():
-        return jsonify({"message": "Username already exists"}), 409
-
-    try:
-        hashed_password = generate_password_hash(password)
-        db.execute(
-            'INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
-            (username, hashed_password, assigned_role)
-        )
-        db.commit()
-        
-        print(f"User '{username}' successfully registered with role '{assigned_role}'.")
-        return jsonify({"message": f"Account created! Role: {assigned_role.upper()}"}), 201
-        
-    except sqlite3.Error as e:
-        print(f"Database error during registration: {e}")
-        return jsonify({"message": "A database error occurred during registration."}), 500
-
-
-@app.route('/login', methods=['POST'])
-def login():
-    """Handles user login."""
-    data = request.get_json()
-    username = data.get('username')
-    password = data.get('password')
-
-    if not all([username, password]):
-        return jsonify({"message": "Missing username or password"}), 400
-
-    db = get_db()
+    if trans_type and trans_type != 'all':
+        query += ' AND type = ?'
+        params.append(trans_type)
     
-    user_row = db.execute(
-        'SELECT password_hash, role FROM users WHERE username = ?', (username,)
-    ).fetchone()
+    if category and category != 'all':
+        query += ' AND category = ?'
+        params.append(category)
+    
+    if start_date:
+        query += ' AND date >= ?'
+        params.append(start_date)
+    
+    if end_date:
+        query += ' AND date <= ?'
+        params.append(end_date)
+    
+    query += ' ORDER BY date DESC, id DESC'
+    
+    c.execute(query, params)
+    transactions = [dict(row) for row in c.fetchall()]
+    conn.close()
+    
+    return jsonify(transactions)
 
-    if user_row:
-        if check_password_hash(user_row['password_hash'], password):
-            user_role = user_row['role']
-            session['username'] = username
-            session['role'] = user_role
-            print(f"User '{username}' logged in with role '{user_role}'.")
-            
-            return jsonify({
-                "message": f"Login successful, welcome {username}!",
-                "role": user_role
-            }), 200
-        
-    return jsonify({"message": "Invalid username or password"}), 401
-
-@app.route('/logout', methods=['POST'])
-def logout():
-    """Handles user logout."""
-    if 'username' in session:
-        username = session['username']
-        session.pop('username', None)
-        session.pop('role', None) 
-        print(f"User '{username}' logged out.")
-        return jsonify({"message": "You have been logged out successfully"}), 200
-    return jsonify({"message": "Not logged in"}), 400
-
-@app.route('/categories', methods=['GET', 'POST'])
-def categories():
-    """Handles fetching and creating categories for the current user."""
-    user_id = get_user_id()
-    if user_id is None:
-        return jsonify({"message": "Unauthorized"}), 401
-
-    db = get_db()
-
-    if request.method == 'GET':
-        # Fetch all categories, no type filtering
-        categories_data = db.execute(
-            'SELECT id, name FROM categories WHERE user_id = ? ORDER BY name', 
-            (user_id,)
-        ).fetchall()
-        
-        categories_list = [dict(row) for row in categories_data]
-        return jsonify(categories_list), 200
-
-    elif request.method == 'POST':
-        data = request.get_json()
-        category_name = data.get('name')
-
-        # No category type needed for creation
-        if not category_name:
-            return jsonify({"message": "Invalid category name"}), 400
-        
-        try:
-            # Insert statement only uses name
-            cursor = db.execute(
-                'INSERT INTO categories (user_id, name) VALUES (?, ?)',
-                (user_id, category_name)
-            )
-            db.commit()
-            return jsonify({
-                "message": f"Category '{category_name}' created successfully",
-                "id": cursor.lastrowid,
-                "name": category_name
-            }), 201
-        except sqlite3.IntegrityError:
-            return jsonify({"message": f"Category '{category_name}' already exists"}), 409
-        except sqlite3.Error as e:
-            print(f"Database error during category creation: {e}")
-            return jsonify({"message": "Database error occurred"}), 500
-
-@app.route('/transactions', methods=['POST'])
+@app.route('/api/transactions', methods=['POST'])
+@login_required
 def add_transaction():
-    """Handles adding a new transaction to the database."""
-    user_id = get_user_id()
-    if user_id is None:
-        return jsonify({"message": "Unauthorized"}), 401
-
-    data = request.get_json()
-    amount = data.get('amount')
-    type_ = data.get('type') # 'income' or 'expense' - still necessary for the transaction record
-    note = data.get('note', '')
-    category_id = data.get('category_id')
-
-    # Basic input validation
-    try:
-        amount = float(amount)
-        if amount <= 0:
-            return jsonify({"message": "Amount must be positive"}), 400
-    except (ValueError, TypeError):
-        return jsonify({"message": "Invalid amount"}), 400
-        
-    if type_ not in ['income', 'expense'] or not category_id:
-        return jsonify({"message": "Missing transaction type or category"}), 400
-
-    # Role-based permission check: Only 'admin' can add income (remains)
-    if type_ == 'income' and not check_permission('admin'):
-        return jsonify({"message": "Only Admin users can record Income"}), 403
+    data = request.json
+    user_id = session['user_id']
+    username = session['username']
     
-    db = get_db()
+    if not data.get('amount') or not data.get('type') or not data.get('category') or not data.get('date'):
+        return jsonify({'error': 'Missing required fields'}), 400
     
-    try:
-        # Only verify category belongs to user
-        category_check = db.execute(
-            'SELECT id, name FROM categories WHERE id = ? AND user_id = ?',
-            (category_id, user_id)
-        ).fetchone()
-
-        if not category_check:
-             return jsonify({"message": f"Invalid category ID"}), 400
-        
-        category_name = category_check['name']
-
-        # Insert transaction into the database
-        cursor = db.execute(
-            'INSERT INTO transactions (user_id, amount, type, note, category_id) VALUES (?, ?, ?, ?, ?)',
-            (user_id, amount, type_, note, category_id)
-        )
-        db.commit()
-
-        return jsonify({
-            "message": f"{type_.capitalize()} of ${amount:.2f} recorded under '{category_name}'",
-            "id": cursor.lastrowid,
-            "timestamp": datetime.datetime.now().isoformat()
-        }), 201
-
-    except sqlite3.Error as e:
-        print(f"Database error during transaction insertion: {e}")
-        return jsonify({"message": "A database error occurred during transaction recording."}), 500
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''INSERT INTO transactions (user_id, username, amount, type, category, description, date)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)''',
+              (user_id, username, data['amount'], data['type'], data['category'], 
+               data.get('description', ''), data['date']))
+    conn.commit()
+    transaction_id = c.lastrowid
+    conn.close()
     
-@app.route('/transactions_csv', methods=['GET'])
-def transactions_csv():
-    """
-    Downloads transactions for a given date range and optional category as a CSV file.
-    """
-    user_id = get_user_id()
-    if user_id is None:
-        return jsonify({"message": "Unauthorized"}), 401
-    
-    # --- SECURITY ENFORCEMENT ---
-    if not check_permission('admin'):
-        return jsonify({"message": "Forbidden: Only Admin users can export data"}), 403
+    return jsonify({'id': transaction_id, 'message': 'Transaction added successfully'}), 201
 
-    # Fetch filters from query parameters
-    category_id = request.args.get('category_id')
+@app.route('/api/transactions/<int:transaction_id>', methods=['PUT'])
+@login_required
+def update_transaction(transaction_id):
+    data = request.json
+    user_id = session['user_id']
+    role = session['role']
+    
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Check ownership or admin rights
+    if role == 'admin':
+        c.execute('''UPDATE transactions 
+                     SET amount = ?, type = ?, category = ?, description = ?, date = ?
+                     WHERE id = ?''',
+                  (data['amount'], data['type'], data['category'], 
+                   data.get('description', ''), data['date'], transaction_id))
+    else:
+        c.execute('''UPDATE transactions 
+                     SET amount = ?, type = ?, category = ?, description = ?, date = ?
+                     WHERE id = ? AND user_id = ?''',
+                  (data['amount'], data['type'], data['category'], 
+                   data.get('description', ''), data['date'], transaction_id, user_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Transaction updated successfully'})
+
+@app.route('/api/transactions/<int:transaction_id>', methods=['DELETE'])
+@login_required
+def delete_transaction(transaction_id):
+    user_id = session['user_id']
+    role = session['role']
+    
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Admin can delete any transaction, users can only delete their own
+    if role == 'admin':
+        c.execute('DELETE FROM transactions WHERE id = ?', (transaction_id,))
+    else:
+        c.execute('DELETE FROM transactions WHERE id = ? AND user_id = ?', 
+                  (transaction_id, user_id))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Transaction deleted successfully'})
+
+@app.route('/api/stats', methods=['GET'])
+@login_required
+@admin_required
+def get_stats():
+    # Only admins can access stats
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Total income (all users)
+    c.execute('SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE type = "income"')
+    total_income = c.fetchone()['total']
+    
+    # Total expenses (all users)
+    c.execute('SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE type = "expense"')
+    total_expenses = c.fetchone()['total']
+    
+    # Category breakdown for expenses
+    c.execute('''SELECT category, COALESCE(SUM(amount), 0) as total 
+                 FROM transactions 
+                 WHERE type = "expense"
+                 GROUP BY category 
+                 ORDER BY total DESC''')
+    expense_by_category = [dict(row) for row in c.fetchall()]
+    
+    # Category breakdown for income
+    c.execute('''SELECT category, COALESCE(SUM(amount), 0) as total 
+                 FROM transactions 
+                 WHERE type = "income"
+                 GROUP BY category 
+                 ORDER BY total DESC''')
+    income_by_category = [dict(row) for row in c.fetchall()]
+    
+    # Monthly breakdown (last 6 months)
+    c.execute('''SELECT strftime('%Y-%m', date) as month, 
+                 type,
+                 COALESCE(SUM(amount), 0) as total
+                 FROM transactions
+                 WHERE date >= date('now', '-6 months')
+                 GROUP BY month, type
+                 ORDER BY month DESC''')
+    by_month = [dict(row) for row in c.fetchall()]
+    
+    conn.close()
+    
+    return jsonify({
+        'total_income': total_income,
+        'total_expenses': total_expenses,
+        'balance': total_income - total_expenses,
+        'expense_by_category': expense_by_category,
+        'income_by_category': income_by_category,
+        'by_month': by_month
+    })
+
+@app.route('/api/download-csv', methods=['GET'])
+@login_required
+@admin_required
+def download_csv():
+    # Only admins can download CSV
+    
+    # Get filter parameters
+    trans_type = request.args.get('type')
+    category = request.args.get('category')
     start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date') 
-    db = get_db()
+    end_date = request.args.get('end_date')
     
-    # Base WHERE clause parts, aliased with 't' for transactions table
-    where_parts = ["t.user_id = ?"]
-    query_params = [user_id]
+    conn = get_db()
+    c = conn.cursor()
     
-    # 1. Category Filtering
-    if category_id and category_id != '0': # '0' is usually for "All"
-        try:
-            category_id_int = int(category_id)
-            # Use alias 't' for category_id as it belongs to the transactions table
-            where_parts.append("t.category_id = ?")
-            query_params.append(category_id_int)
-        except ValueError:
-            return jsonify({"message": "Invalid category_id format"}), 400
-
-    # 2. Date Filtering
+    query = 'SELECT date, username, type, category, description, amount FROM transactions WHERE 1=1'
+    params = []
+    
+    if trans_type and trans_type != 'all':
+        query += ' AND type = ?'
+        params.append(trans_type)
+    
+    if category and category != 'all':
+        query += ' AND category = ?'
+        params.append(category)
+    
     if start_date:
-        where_parts.append("t.timestamp >= ?")
-        query_params.append(start_date + " 00:00:00") 
+        query += ' AND date >= ?'
+        params.append(start_date)
     
     if end_date:
-        where_parts.append("t.timestamp <= ?")
-        query_params.append(end_date + " 23:59:59")
+        query += ' AND date <= ?'
+        params.append(end_date)
     
-    # Construct the full WHERE clause
-    where_clause = " AND ".join(where_parts)
+    query += ' ORDER BY date DESC'
     
-    try:
-        # Query to fetch all relevant transaction details, including category name
-        transactions_query = f"""
-            SELECT 
-                t.timestamp,
-                t.type,
-                t.amount,
-                c.name AS category,
-                t.note
-            FROM transactions t
-            JOIN categories c ON t.category_id = c.id
-            WHERE {where_clause}
-            ORDER BY t.timestamp DESC
-        """
-        transaction_results = db.execute(transactions_query, tuple(query_params)).fetchall()
-        
-        # Build CSV content
-        csv_output = ["Timestamp,Type,Amount,Category,Note"] # CSV Header
-        
-        for row in transaction_results:
-            # Escape quotes in notes if necessary, though simpler to avoid it for this scope
-            note_safe = str(row['note']).replace('"', '""')
-            
-            line = f"{row['timestamp']},{row['type']},{row['amount']:.2f},\"{row['category']}\",\"{note_safe}\""
-            csv_output.append(line)
-            
-        csv_string = "\n".join(csv_output)
-        
-        # Create a Flask response object with the CSV data and download headers
-        response = make_response(csv_string)
-        response.headers["Content-Disposition"] = "attachment; filename=transactions_export.csv"
-        response.headers["Content-type"] = "text/csv"
-        return response
+    c.execute(query, params)
+    transactions = c.fetchall()
+    conn.close()
+    
+    # Create CSV
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Date', 'User', 'Type', 'Category', 'Description', 'Amount'])
+    
+    for trans in transactions:
+        writer.writerow(trans)
+    
+    # Create response
+    response = make_response(output.getvalue())
+    response.headers['Content-Type'] = 'text/csv'
+    response.headers['Content-Disposition'] = f'attachment; filename=transactions_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+    
+    return response
 
-    except sqlite3.Error as e:
-        print(f"Database error during CSV export: {e}")
-        return jsonify({"message": "A database error occurred during CSV export."}), 500
-
-@app.route('/summary', methods=['GET'])
-def get_summary():
-    """
-    Calculates the financial summary, including overall balance, daily trends, 
-    and top categories, optionally filtered by category and date range.
+# Category management routes
+@app.route('/api/categories', methods=['GET'])
+@login_required
+def get_categories():
+    trans_type = request.args.get('type', 'all')
     
-    The 't' alias is used for the transactions table in the WHERE clause 
-    to prevent 'ambiguous column name' errors when joining tables.
-    """
-    user_id = get_user_id()
-    if user_id is None:
-        return jsonify({"message": "Unauthorized"}), 401
-
-    # Permission Check: Only admin can access summary
-    if not check_permission('admin'):
-        return jsonify({"message": "Forbidden: Only Admin users can view the summary"}), 403
-
-    category_id = request.args.get('category_id')
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date') # Inclusive end date
-    db = get_db()
+    conn = get_db()
+    c = conn.cursor()
     
-    # Base WHERE clause parts, now aliased with 't' (for transactions table) 
-    # to resolve the 'ambiguous column name: user_id' error in join queries.
-    where_parts = ["t.user_id = ?"]
-    query_params = [user_id]
-    category_name = "All Categories"
+    if trans_type == 'all':
+        c.execute('SELECT * FROM categories ORDER BY type, name')
+    else:
+        c.execute('SELECT * FROM categories WHERE type = ? ORDER BY name', (trans_type,))
     
-    # 1. Category Filtering
-    if category_id:
-        try:
-            category_id_int = int(category_id)
-            category_row = db.execute(
-                'SELECT name FROM categories WHERE id = ? AND user_id = ?', 
-                (category_id_int, user_id)
-            ).fetchone()
-            
-            if not category_row:
-                return jsonify({"message": "Invalid category ID for this user"}), 400
-                
-            category_name = category_row['name']
-            # Use alias 't' for category_id as it belongs to the transactions table
-            where_parts.append("t.category_id = ?")
-            query_params.append(category_id_int)
+    categories = [dict(row) for row in c.fetchall()]
+    conn.close()
+    
+    return jsonify(categories)
 
-        except ValueError:
-            return jsonify({"message": "Invalid category_id format"}), 400
-
-    # 2. Date Filtering
-    if start_date:
-        # Transactions on or after the start date (inclusive)
-        where_parts.append("t.timestamp >= ?")
-        query_params.append(start_date + " 00:00:00") 
+@app.route('/api/categories', methods=['POST'])
+@login_required
+@admin_required
+def add_category():
+    data = request.json
     
-    if end_date:
-        # Transactions on or before the end date (inclusive)
-        where_parts.append("t.timestamp <= ?")
-        query_params.append(end_date + " 23:59:59")
+    if not data.get('name') or not data.get('type'):
+        return jsonify({'error': 'Name and type are required'}), 400
     
-    # Construct the full WHERE clause
-    where_clause = " AND ".join(where_parts)
+    if data['type'] not in ['income', 'expense']:
+        return jsonify({'error': 'Type must be income or expense'}), 400
+    
+    conn = get_db()
+    c = conn.cursor()
     
     try:
-        # A. Calculate Overall Balance (Income - Expense)
-        # Use alias 't' for the transactions table to match the aliased WHERE clause
-        balance_query = f"SELECT SUM(CASE WHEN type='income' THEN amount ELSE -amount END) AS balance FROM transactions t WHERE {where_clause}"
-        balance_result = db.execute(balance_query, tuple(query_params)).fetchone()
-        balance = balance_result['balance'] if balance_result and balance_result['balance'] is not None else 0.0
+        c.execute('INSERT INTO categories (name, type, icon) VALUES (?, ?, ?)',
+                  (data['name'], data['type'], data.get('icon', '📦')))
+        conn.commit()
+        category_id = c.lastrowid
+        conn.close()
+        return jsonify({'id': category_id, 'message': 'Category added successfully'}), 201
+    except sqlite3.IntegrityError:
+        conn.close()
+        return jsonify({'error': 'Category already exists'}), 400
 
-        # B. Get Daily Summary for Line Plot (Grouping by date)
-        # Use alias 't' for the transactions table to match the aliased WHERE clause
-        daily_summary_query = f"""
-            SELECT 
-                SUBSTR(t.timestamp, 1, 10) AS date,
-                SUM(CASE WHEN t.type='income' THEN t.amount ELSE 0 END) AS total_income,
-                SUM(CASE WHEN t.type='expense' THEN t.amount ELSE 0 END) AS total_expense
-            FROM transactions t
-            WHERE {where_clause}
-            GROUP BY date
-            ORDER BY date
-        """
-        # Execute the query with the current parameters
-        daily_results = db.execute(daily_summary_query, tuple(query_params)).fetchall()
-        daily_summary = [dict(row) for row in daily_results]
+@app.route('/api/categories/<int:category_id>', methods=['DELETE'])
+@login_required
+@admin_required
+def delete_category(category_id):
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Check if category is in use
+    c.execute('SELECT COUNT(*) as count FROM transactions WHERE category IN (SELECT name FROM categories WHERE id = ?)', 
+              (category_id,))
+    count = c.fetchone()['count']
+    
+    if count > 0:
+        conn.close()
+        return jsonify({'error': 'Cannot delete category that is in use'}), 400
+    
+    c.execute('DELETE FROM categories WHERE id = ?', (category_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': 'Category deleted successfully'})
 
-        # C. Get Top Income/Expense Categories 
-        # This query already uses aliases t and c, and now the where_clause is compatible
-        category_summary_query = f"""
-            SELECT 
-                c.name AS category_name,
-                t.type,
-                SUM(t.amount) AS total_amount
-            FROM transactions t
-            JOIN categories c ON t.category_id = c.id
-            WHERE {where_clause}
-            GROUP BY c.name, t.type
-            ORDER BY t.type DESC, total_amount DESC
-        """
-        category_results = db.execute(category_summary_query, tuple(query_params)).fetchall()
-        
-        top_income_categories = []
-        top_expense_categories = []
-        
-        for row in category_results:
-            cat_data = {'name': row['category_name'], 'total_amount': round(row['total_amount'], 2)}
-            if row['type'] == 'income':
-                top_income_categories.append(cat_data)
-            elif row['type'] == 'expense':
-                top_expense_categories.append(cat_data)
-        
-        # Sort and limit to top 5 categories
-        top_income_categories = sorted(top_income_categories, key=lambda x: x['total_amount'], reverse=True)[:5]
-        top_expense_categories = sorted(top_expense_categories, key=lambda x: x['total_amount'], reverse=True)[:5]
-
-
-        return jsonify({
-            "category_name": category_name,
-            "start_date": start_date,
-            "end_date": end_date,
-            "balance": balance,
-            "daily_summary": daily_summary,
-            "top_income_categories": top_income_categories,
-            "top_expense_categories": top_expense_categories
-        }), 200
-
-    except sqlite3.Error as e:
-        print(f"Database error during detailed summary calculation: {e}")
-        return jsonify({"message": "A database error occurred during summary calculation."}), 500
-
-
-# --- App Execution ---
 if __name__ == '__main__':
-    # Initialize the database before running the app
-    with app.app_context():
-        init_db(app)
-
-    print(f"--- Development Server Initialized ---")
-    print(f"Admin Key (Role: admin): '{ADMIN_SECRET_KEY}'")
-    print(f"Standard Key (Role: standard): '{STANDARD_USER_SECRET_KEY}'")
-    print(f"Access the app at: http://127.0.0.1:5000/")
-    
-    # app.run(debug=True)
-    app.run(host='0.0.0.0', port=8080)
-
+    app.run(debug=True)
