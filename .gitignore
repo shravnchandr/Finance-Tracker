@@ -1,0 +1,23 @@
+# Ignore system files
+.DS_Store
+Thumbs.db
+__pycache__/
+
+# Ignore dependency folders
+node_modules/
+vendor/
+
+# Ignore build artifacts
+dist/
+build/
+
+# Ignore environment/config files
+.env
+.venv
+config.json
+
+# Ignore logs
+*.log
+
+# Ignore Database
+*.db
