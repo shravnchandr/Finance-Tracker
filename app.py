@@ -1,7 +1,7 @@
 import os
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, make_response
 import sqlite3
-from datetime import datetime
+import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 import csv
@@ -261,6 +261,7 @@ def add_transaction():
 def update_transaction(transaction_id):
     data = request.json
     user_id = session['user_id']
+    username = session['username']
     role = session['role']
     
     conn = get_db()
@@ -268,12 +269,15 @@ def update_transaction(transaction_id):
     
     # Check ownership or admin rights
     if role == 'admin':
+        # Admin editing: change ownership to admin
         c.execute('''UPDATE transactions 
-                     SET amount = ?, type = ?, category = ?, description = ?, date = ?
+                     SET amount = ?, type = ?, category = ?, description = ?, date = ?, 
+                         user_id = ?, username = ?
                      WHERE id = ?''',
                   (data['amount'], data['type'], data['category'], 
-                   data.get('description', ''), data['date'], transaction_id))
+                   data.get('description', ''), data['date'], user_id, username, transaction_id))
     else:
+        # User can only edit their own transactions
         c.execute('''UPDATE transactions 
                      SET amount = ?, type = ?, category = ?, description = ?, date = ?
                      WHERE id = ? AND user_id = ?''',
