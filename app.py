@@ -1,8 +1,10 @@
 import os
-from flask import Flask, render_template, request, jsonify, redirect, url_for, session, make_response
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session, make_response, send_from_directory
 import sqlite3
-import datetime
+import datetime as dt
+from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from functools import wraps
 import csv
 import io
@@ -13,7 +15,7 @@ load_dotenv()  # Load variables from .env
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY')
-app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(minutes=10)
+app.config['PERMANENT_SESSION_LIFETIME'] = dt.timedelta(minutes=15)
 
 # Registration keys
 ADMIN_KEY = os.environ.get('ADMIN_KEY')
@@ -42,6 +44,8 @@ def init_db():
                   category TEXT NOT NULL,
                   description TEXT,
                   date TEXT NOT NULL,
+                  attachment_filename TEXT,
+                  attachment_path TEXT,
                   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                   FOREIGN KEY (user_id) REFERENCES users (id))''')
     
@@ -80,6 +84,30 @@ def init_db():
     conn.close()
 
 init_db()
+
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'doc', 'docx', 'xls', 'xlsx', 'txt'}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
+
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def secure_filename_custom(filename):
+    """Create a secure filename with timestamp"""
+    # First use werkzeug's secure_filename
+    filename = secure_filename(filename)
+    # Then add timestamp
+    name, ext = os.path.splitext(filename)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    return f"{timestamp}_{name}{ext}"
+
 
 # Database helper
 def get_db():
@@ -237,57 +265,135 @@ def get_transactions():
 @app.route('/api/transactions', methods=['POST'])
 @login_required
 def add_transaction():
-    data = request.json
     user_id = session['user_id']
     username = session['username']
-    
-    if not data.get('amount') or not data.get('type') or not data.get('category') or not data.get('date'):
-        return jsonify({'error': 'Missing required fields'}), 400
-    
-    conn = get_db()
-    c = conn.cursor()
-    c.execute('''INSERT INTO transactions (user_id, username, amount, type, category, description, date)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)''',
-              (user_id, username, data['amount'], data['type'], data['category'], 
-               data.get('description', ''), data['date']))
-    conn.commit()
-    transaction_id = c.lastrowid
-    conn.close()
-    
-    return jsonify({'id': transaction_id, 'message': 'Transaction added successfully'}), 201
+
+    try:
+        file = request.files.get('attachment')  # safe getter
+
+        # If multipart/form-data
+        if file or request.form:
+            amount = request.form.get('amount')
+            trans_type = request.form.get('type')
+            category = request.form.get('category')
+            description = request.form.get('description', '')
+            date = request.form.get('date')
+        else:
+            # JSON
+            data = request.get_json(force=True)
+            amount = data.get('amount')
+            trans_type = data.get('type')
+            category = data.get('category')
+            description = data.get('description', '')
+            date = data.get('date')
+
+        # Handle attachment
+        attachment_filename = None
+        attachment_path = None
+        if file and file.filename and allowed_file(file.filename):
+            filename = secure_filename_custom(file.filename)
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(filepath)
+            attachment_filename = file.filename
+            attachment_path = filename
+
+        # Validate
+        if not all([amount, trans_type, category, date]):
+            return jsonify({'error': 'Missing required fields'}), 400
+
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('''INSERT INTO transactions 
+                     (user_id, username, amount, type, category, description, date, 
+                      attachment_filename, attachment_path)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                  (user_id, username, amount, trans_type, category, description, date,
+                   attachment_filename, attachment_path))
+        conn.commit()
+        transaction_id = c.lastrowid
+        conn.close()
+
+        return jsonify({'id': transaction_id, 'message': 'Transaction added successfully'}), 201
+
+    except Exception as e:
+        print(f"Error adding transaction: {e}")
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/transactions/<int:transaction_id>', methods=['PUT'])
 @login_required
 def update_transaction(transaction_id):
-    data = request.json
     user_id = session['user_id']
     username = session['username']
     role = session['role']
-    
+
     conn = get_db()
     c = conn.cursor()
-    
-    # Check ownership or admin rights
-    if role == 'admin':
-        # Admin editing: change ownership to admin
-        c.execute('''UPDATE transactions 
-                     SET amount = ?, type = ?, category = ?, description = ?, date = ?, 
-                         user_id = ?, username = ?
-                     WHERE id = ?''',
-                  (data['amount'], data['type'], data['category'], 
-                   data.get('description', ''), data['date'], user_id, username, transaction_id))
+
+    # Fetch old record
+    c.execute('SELECT * FROM transactions WHERE id = ?', (transaction_id,))
+    old_trans = c.fetchone()
+    if not old_trans:
+        conn.close()
+        return jsonify({'error': 'Transaction not found'}), 404
+
+    old_attachment_filename = old_trans['attachment_filename']
+    old_attachment_path = old_trans['attachment_path']
+
+    file = request.files.get('attachment')
+
+    # Parse form-data or JSON
+    if file or request.form:
+        amount = request.form.get('amount')
+        trans_type = request.form.get('type')
+        category = request.form.get('category')
+        description = request.form.get('description', '')
+        date = request.form.get('date')
     else:
-        # User can only edit their own transactions
-        c.execute('''UPDATE transactions 
-                     SET amount = ?, type = ?, category = ?, description = ?, date = ?
+        data = request.get_json(force=True)
+        amount = data.get('amount')
+        trans_type = data.get('type')
+        category = data.get('category')
+        description = data.get('description', '')
+        date = data.get('date')
+
+    attachment_filename = old_attachment_filename
+    attachment_path = old_attachment_path
+
+    # Handle new file upload
+    if file and file.filename and allowed_file(file.filename):
+        # Delete old file if it exists
+        if old_attachment_path:
+            old_file_path = os.path.join(app.config['UPLOAD_FOLDER'], old_attachment_path)
+            if os.path.exists(old_file_path):
+                os.remove(old_file_path)
+        filename = secure_filename_custom(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(filepath)
+        attachment_filename = file.filename
+        attachment_path = filename
+
+    # Update DB
+    if role == 'admin':
+        c.execute('''UPDATE transactions
+                     SET amount = ?, type = ?, category = ?, description = ?, date = ?, 
+                         user_id = ?, username = ?, attachment_filename = ?, attachment_path = ?
+                     WHERE id = ?''',
+                  (amount, trans_type, category, description, date,
+                   user_id, username, attachment_filename, attachment_path, transaction_id))
+    else:
+        c.execute('''UPDATE transactions
+                     SET amount = ?, type = ?, category = ?, description = ?, date = ?, 
+                         attachment_filename = ?, attachment_path = ?
                      WHERE id = ? AND user_id = ?''',
-                  (data['amount'], data['type'], data['category'], 
-                   data.get('description', ''), data['date'], transaction_id, user_id))
-    
+                  (amount, trans_type, category, description, date,
+                   attachment_filename, attachment_path, transaction_id, user_id))
+
     conn.commit()
     conn.close()
-    
+
     return jsonify({'message': 'Transaction updated successfully'})
+
 
 @app.route('/api/transactions/<int:transaction_id>', methods=['DELETE'])
 @login_required
@@ -297,6 +403,24 @@ def delete_transaction(transaction_id):
     
     conn = get_db()
     c = conn.cursor()
+    
+    # Get transaction to delete attached file
+    if role == 'admin':
+        c.execute('SELECT attachment_path FROM transactions WHERE id = ?', (transaction_id,))
+    else:
+        c.execute('SELECT attachment_path FROM transactions WHERE id = ? AND user_id = ?', 
+                  (transaction_id, user_id))
+    
+    trans = c.fetchone()
+    
+    if trans and trans['attachment_path']:
+        # Delete file from filesystem
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], trans['attachment_path'])
+        if os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+            except Exception as e:
+                print(f"Error deleting file: {e}")
     
     # Admin can delete any transaction, users can only delete their own
     if role == 'admin':
@@ -485,8 +609,67 @@ def delete_category(category_id):
     
     return jsonify({'message': 'Category deleted successfully'})
 
-if __name__ == '__main__':
-    # app.run(debug=True)
-    app.run(host='0.0.0.0', port=8080, debug=False, 
-            ssl_context=('cert.pem', 'key.pem'))
+@app.route('/api/attachments/<filename>')
+@login_required
+def download_attachment(filename):
+    """Download or view attachment file"""
+    try:
+        # Verify file exists
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        if not os.path.exists(file_path):
+            return jsonify({'error': 'File not found'}), 404
+        
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+    except Exception as e:
+        print(f"Error serving file: {e}")
+        return jsonify({'error': 'File not found'}), 404
+
+# Delete attachment route
+@app.route('/api/transactions/<int:transaction_id>/attachment', methods=['DELETE'])
+@login_required
+def delete_attachment(transaction_id):
+    user_id = session['user_id']
+    role = session['role']
     
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Get transaction
+    if role == 'admin':
+        c.execute('SELECT attachment_path FROM transactions WHERE id = ?', (transaction_id,))
+    else:
+        c.execute('SELECT attachment_path FROM transactions WHERE id = ? AND user_id = ?', 
+                  (transaction_id, user_id))
+    
+    trans = c.fetchone()
+    
+    if not trans:
+        conn.close()
+        return jsonify({'error': 'Transaction not found'}), 404
+    
+    if trans['attachment_path']:
+        # Delete file from filesystem
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], trans['attachment_path'])
+        if os.path.exists(filepath):
+            try:
+                os.remove(filepath)
+            except Exception as e:
+                print(f"Error deleting file: {e}")
+        
+        # Update database
+        if role == 'admin':
+            c.execute('UPDATE transactions SET attachment_filename = NULL, attachment_path = NULL WHERE id = ?', 
+                      (transaction_id,))
+        else:
+            c.execute('UPDATE transactions SET attachment_filename = NULL, attachment_path = NULL WHERE id = ? AND user_id = ?', 
+                      (transaction_id, user_id))
+        
+        conn.commit()
+    
+    conn.close()
+    
+    return jsonify({'message': 'Attachment deleted successfully'})
+
+if __name__ == '__main__':
+    app.run(debug=True, port=8080)
+    # app.run(host='0.0.0.0', port=8080)

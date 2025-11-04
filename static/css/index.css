@@ -702,6 +702,37 @@ header {
     margin-left: 8px;
 }
 
+.attachment-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 100px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--secondary);
+    color: white;
+    margin-left: 8px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.attachment-badge:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 6px var(--shadow);
+}
+
+input[type="file"] {
+    padding: 12px;
+    border: 2px dashed var(--outline);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+input[type="file"]:hover {
+    border-color: var(--primary);
+    background: var(--surface-variant);
+}
+
 .empty-state {
     text-align: center;
     padding: 60px 20px;

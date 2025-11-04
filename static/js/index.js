@@ -6,6 +6,7 @@ let incomeCategories = [];
 
 let editingTransactionId = null;
 let currentType = 'expense';
+let currentAttachmentPath = null;
 
 // Hide stats and download button for regular users
 if (USER_ROLE === 'user') {
@@ -181,41 +182,46 @@ document.getElementById('transactionForm').addEventListener('submit', async (e) 
     const category = document.getElementById('category').value;
     const description = document.getElementById('description').value;
     const date = document.getElementById('date').value;
+    const attachment = document.getElementById('attachment').files[0];
 
     if (!amount || !category || !date) {
         alert('Please fill in all required fields');
         return;
     }
     
-    const transaction = {
-        amount: parseFloat(amount),
-        type: transType,
-        category: category,
-        description: description,
-        date: date
-    };
+    // Create FormData for file upload
+    const formData = new FormData();
+    formData.append('amount', amount);
+    formData.append('type', transType);
+    formData.append('category', category);
+    formData.append('description', description);
+    formData.append('date', date);
+    
+    if (attachment) {
+        formData.append('attachment', attachment);
+    }
 
     try {
         let response;
         if (editingTransactionId) {
             response = await fetch(`/api/transactions/${editingTransactionId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(transaction)
+                body: formData
             });
         } else {
             response = await fetch('/api/transactions', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(transaction)
+                body: formData
             });
         }
 
         if (response.ok) {
             editingTransactionId = null;
+            currentAttachmentPath = null;
             document.getElementById('transactionForm').reset();
             document.getElementById('date').valueAsDate = new Date();
             document.getElementById('transactionType').value = 'expense';
+            document.getElementById('currentAttachment').style.display = 'none';
             currentType = 'expense';
             
             document.querySelectorAll('.type-option').forEach(opt => opt.classList.remove('active'));
@@ -276,10 +282,15 @@ async function loadTransactions() {
             type: trans.type,
             category: trans.category,
             description: trans.description || '',
-            date: trans.date
+            date: trans.date,
+            attachment_filename: trans.attachment_filename,
+            attachment_path: trans.attachment_path
         };
         
         const userBadge = USER_ROLE === 'admin' ? `<span class="user-badge">${trans.username}</span>` : '';
+        
+        const attachmentBadge = trans.attachment_filename ? 
+            `<span class="attachment-badge" onclick="viewAttachment('${trans.attachment_path}', '${trans.attachment_filename}')" title="View attachment">📎 ${trans.attachment_filename}</span>` : '';
         
         return `
         <div class="transaction-item ${trans.type}">
@@ -288,6 +299,7 @@ async function loadTransactions() {
                     <span class="type-badge ${trans.type}">${trans.type}</span>
                     <span class="category-badge" style="color:#FFb59A">${trans.category}</span>
                     ${userBadge}
+                    ${attachmentBadge}
                 </h4>
                 <p>${escapedDescription}</p>
                 <p style="font-size: 0.813rem; margin-top: 4px;">${new Date(trans.date).toLocaleDateString()}</p>
@@ -328,11 +340,20 @@ async function loadStats() {
 function editTransaction(trans) {
     editingTransactionId = trans.id;
     currentType = trans.type;
+    currentAttachmentPath = trans.attachment_path;
     
     document.getElementById('amount').value = trans.amount;
     document.getElementById('transactionType').value = trans.type;
     document.getElementById('description').value = trans.description || '';
     document.getElementById('date').value = trans.date;
+    
+    // Show current attachment if exists
+    if (trans.attachment_filename) {
+        document.getElementById('currentAttachment').style.display = 'block';
+        document.getElementById('attachmentName').textContent = trans.attachment_filename;
+    } else {
+        document.getElementById('currentAttachment').style.display = 'none';
+    }
     
     document.querySelectorAll('.type-option').forEach(opt => opt.classList.remove('active'));
     document.querySelector(`.type-option.${trans.type}`).classList.add('active');
@@ -346,6 +367,34 @@ function editTransaction(trans) {
     document.querySelector('.btn').textContent = 'Update Transaction';
     document.getElementById('formTitle').textContent = 'Edit Transaction';
     window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function viewAttachment(path, filename) {
+    if (path) {
+        window.open(`/api/attachments/${path}`, '_blank');
+    }
+}
+
+async function removeAttachment() {
+    if (!editingTransactionId) return;
+    
+    if (!confirm('Remove attachment from this transaction?')) return;
+    
+    try {
+        const response = await fetch(`/api/transactions/${editingTransactionId}/attachment`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            document.getElementById('currentAttachment').style.display = 'none';
+            currentAttachmentPath = null;
+            alert('Attachment removed successfully');
+        } else {
+            alert('Error removing attachment');
+        }
+    } catch (error) {
+        alert('Error removing attachment');
+    }
 }
 
 async function deleteTransaction(id) {
@@ -387,6 +436,7 @@ function logout() {
         window.location.href = '/logout';
     }
 }
+
 
 function switchStatsTab(tab) {
     // Update tab buttons

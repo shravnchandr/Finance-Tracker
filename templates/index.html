@@ -108,6 +108,19 @@
                         <label>Date</label>
                         <input type="date" id="date" required>
                     </div>
+                    <div class="form-group">
+                        <label>Attachment (Optional)</label>
+                        <input type="file" id="attachment" accept=".pdf,.png,.jpg,.jpeg,.gif,.doc,.docx,.xls,.xlsx,.txt">
+                        <p style="font-size: 0.75rem; color: var(--on-surface-variant); margin-top: 4px;">
+                            Max 10MB - PDF, Images, Documents
+                        </p>
+                        <div id="currentAttachment" style="display: none; margin-top: 8px;">
+                            <span style="font-size: 0.875rem; color: var(--on-surface-variant);">
+                                Current: <span id="attachmentName"></span>
+                                <button type="button" onclick="removeAttachment()" style="margin-left: 8px; padding: 4px 8px; font-size: 0.75rem; background: var(--error); color: white; border: none; border-radius: 4px; cursor: pointer;">Remove</button>
+                            </span>
+                        </div>
+                    </div>
                     <button type="submit" class="btn">Add Transaction</button>
                 </form>
             </div>
