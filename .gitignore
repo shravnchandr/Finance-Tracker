@@ -10,6 +10,7 @@ vendor/
 # Ignore build artifacts
 dist/
 build/
+uploads/
 
 # Ignore environment/config files
 .env

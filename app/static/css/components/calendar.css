@@ -1,0 +1,95 @@
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+}
+
+.calendar-day-header {
+    text-align: center;
+    font-weight: 600;
+    padding: 12px;
+    background-color: var(--md-sys-color-surface-variant);
+    border-radius: var(--shape-corner-small);
+    color: var(--on-surface-variant);
+    font-size: 0.875rem;
+}
+
+.calendar-day {
+    background-color: var(--md-sys-color-surface);
+    min-height: 120px;
+    padding: 8px;
+    border-radius: var(--shape-corner-medium);
+    position: relative;
+    border: 1px solid var(--md-sys-color-outline-variant);
+    transition: all 0.2s var(--motion-easing-standard);
+}
+
+.calendar-day:hover {
+    background-color: var(--md-sys-color-surface-variant);
+}
+
+.calendar-day.today {
+    border: 2px solid var(--md-sys-color-primary);
+    background-color: rgba(103, 80, 164, 0.05);
+    /* Primary with opacity */
+}
+
+.calendar-day.other-month {
+    opacity: 0.5;
+    background-color: var(--md-sys-color-background);
+}
+
+.calendar-date {
+    font-weight: 600;
+    margin-bottom: 8px;
+    font-size: 0.875rem;
+    color: var(--on-surface);
+}
+
+.calendar-event {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border-radius: var(--shape-corner-extra-small);
+    margin-bottom: 4px;
+    color: var(--md-sys-color-on-primary-container);
+    background-color: var(--md-sys-color-primary-container);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .calendar-grid {
+        gap: 4px;
+    }
+
+    .calendar-day-header {
+        padding: 8px 4px;
+        font-size: 0.75rem;
+    }
+
+    .calendar-day {
+        min-height: 80px;
+        padding: 4px;
+    }
+
+    .calendar-date {
+        font-size: 0.75rem;
+        margin-bottom: 4px;
+    }
+
+    .calendar-event {
+        font-size: 0.65rem;
+        padding: 2px 4px;
+    }
+}

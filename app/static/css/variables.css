@@ -1,0 +1,123 @@
+:root {
+    /* Material 3 Expressive Color Tokens - Purple/Violet Theme */
+    --md-sys-color-primary: #6750A4;
+    --md-sys-color-on-primary: #FFFFFF;
+    --md-sys-color-primary-container: #EADDFF;
+    --md-sys-color-on-primary-container: #21005D;
+
+    --md-sys-color-secondary: #625B71;
+    --md-sys-color-on-secondary: #FFFFFF;
+    --md-sys-color-secondary-container: #E8DEF8;
+    --md-sys-color-on-secondary-container: #1D192B;
+
+    --md-sys-color-tertiary: #7D5260;
+    --md-sys-color-on-tertiary: #FFFFFF;
+    --md-sys-color-tertiary-container: #FFD8E4;
+    --md-sys-color-on-tertiary-container: #31111D;
+
+    --md-sys-color-error: #B3261E;
+    --md-sys-color-on-error: #FFFFFF;
+    --md-sys-color-error-container: #F9DEDC;
+    --md-sys-color-on-error-container: #410E0B;
+
+    --md-sys-color-background: #FFFBFE;
+    --md-sys-color-on-background: #1C1B1F;
+
+    --md-sys-color-surface: #FFFBFE;
+    --md-sys-color-on-surface: #1C1B1F;
+    --md-sys-color-surface-variant: #E7E0EC;
+    --md-sys-color-on-surface-variant: #49454F;
+
+    --md-sys-color-outline: #79747E;
+    --md-sys-color-outline-variant: #CAC4D0;
+
+    /* Custom Semantic Colors mapped to M3 */
+    --primary: var(--md-sys-color-primary);
+    --primary-light: var(--md-sys-color-primary-container);
+    --primary-dark: var(--md-sys-color-on-primary-container);
+    --secondary: var(--md-sys-color-secondary);
+    --success: #4CAF50;
+    /* Keep legacy for now, maybe map to custom green later */
+    --error: var(--md-sys-color-error);
+    --surface: var(--md-sys-color-surface);
+    --surface-variant: #F3EDF7;
+    /* Slightly tinted surface */
+    --on-surface: var(--md-sys-color-on-surface);
+    --on-surface-variant: var(--md-sys-color-on-surface-variant);
+    --outline: var(--md-sys-color-outline);
+
+    /* Elevation / Shadow */
+    --shadow-1: 0px 1px 2px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+    --shadow-2: 0px 1px 2px rgba(0, 0, 0, 0.3), 0px 2px 6px 2px rgba(0, 0, 0, 0.15);
+    --shadow-3: 0px 4px 8px 3px rgba(0, 0, 0, 0.15), 0px 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow: var(--shadow-1);
+    --shadow-elevated: var(--shadow-3);
+
+    /* Typography - Roboto Flex or similar */
+    --font-family: 'Roboto Flex', 'Roboto', sans-serif;
+
+    /* Shapes */
+    --shape-corner-extra-small: 4px;
+    --shape-corner-small: 8px;
+    --shape-corner-medium: 12px;
+    --shape-corner-large: 16px;
+    --shape-corner-extra-large: 28px;
+    --shape-corner-full: 100px;
+
+    /* Motion */
+    --motion-easing-standard: cubic-bezier(0.2, 0.0, 0, 1.0);
+    --motion-easing-emphasized: cubic-bezier(0.2, 0.0, 0, 1.0);
+    --motion-duration-short: 200ms;
+    --motion-duration-medium: 400ms;
+    --motion-duration-long: 600ms;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --md-sys-color-primary: #D0BCFF;
+        --md-sys-color-on-primary: #381E72;
+        --md-sys-color-primary-container: #4F378B;
+        --md-sys-color-on-primary-container: #EADDFF;
+
+        --md-sys-color-secondary: #CCC2DC;
+        --md-sys-color-on-secondary: #332D41;
+        --md-sys-color-secondary-container: #4A4458;
+        --md-sys-color-on-secondary-container: #E8DEF8;
+
+        --md-sys-color-tertiary: #EFB8C8;
+        --md-sys-color-on-tertiary: #492532;
+        --md-sys-color-tertiary-container: #633B48;
+        --md-sys-color-on-tertiary-container: #FFD8E4;
+
+        --md-sys-color-error: #F2B8B5;
+        --md-sys-color-on-error: #601410;
+        --md-sys-color-error-container: #8C1D18;
+        --md-sys-color-on-error-container: #F9DEDC;
+
+        --md-sys-color-background: #1C1B1F;
+        --md-sys-color-on-background: #E6E1E5;
+
+        --md-sys-color-surface: #1C1B1F;
+        --md-sys-color-on-surface: #E6E1E5;
+        --md-sys-color-surface-variant: #49454F;
+        --md-sys-color-on-surface-variant: #CAC4D0;
+
+        --md-sys-color-outline: #938F99;
+        --md-sys-color-outline-variant: #49454F;
+
+        /* Remap for Dark Mode */
+        --primary: var(--md-sys-color-primary);
+        --primary-light: var(--md-sys-color-primary-container);
+        --primary-dark: var(--md-sys-color-on-primary-container);
+        --secondary: var(--md-sys-color-secondary);
+        --surface: var(--md-sys-color-surface);
+        --surface-variant: #2B2930;
+        /* Slightly lighter than surface */
+        --on-surface: var(--md-sys-color-on-surface);
+        --on-surface-variant: var(--md-sys-color-on-surface-variant);
+        --outline: var(--md-sys-color-outline);
+
+        --shadow: rgba(0, 0, 0, 0.5);
+        --shadow-elevated: rgba(0, 0, 0, 0.7);
+    }
+}

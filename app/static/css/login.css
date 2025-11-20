@@ -1,0 +1,195 @@
+/* Variables imported from variables.css */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-family);
+    background: var(--md-sys-color-background);
+    color: var(--on-surface);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    transition: background 0.3s var(--motion-easing-standard);
+}
+
+.auth-container {
+    background: var(--md-sys-color-surface);
+    border-radius: var(--shape-corner-extra-large);
+    padding: 48px;
+    box-shadow: var(--shadow-1);
+    width: 100%;
+    max-width: 450px;
+    animation: fadeInUp 0.6s var(--motion-easing-emphasized);
+    border: 1px solid var(--md-sys-color-outline-variant);
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.auth-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.auth-header h1 {
+    font-size: 2.5rem;
+    font-weight: 400;
+    color: var(--on-surface);
+    margin-bottom: 8px;
+    font-family: var(--font-family);
+}
+
+.auth-header p {
+    color: var(--on-surface-variant);
+    font-size: 1rem;
+}
+
+.form-group {
+    margin-bottom: 24px;
+    position: relative;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--on-surface-variant);
+    font-weight: 500;
+    font-size: 0.875rem;
+    margin-left: 4px;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 16px 20px;
+    border: 1px solid var(--md-sys-color-outline);
+    border-radius: var(--shape-corner-extra-small);
+    font-size: 1rem;
+    background: var(--md-sys-color-surface);
+    color: var(--on-surface);
+    transition: all 0.2s var(--motion-easing-standard);
+    font-family: var(--font-family);
+
+    /* Filled Text Field Style */
+    background-color: var(--md-sys-color-surface-variant);
+    border: none;
+    border-bottom: 1px solid var(--md-sys-color-outline);
+    border-radius: var(--shape-corner-extra-small) var(--shape-corner-extra-small) 0 0;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-bottom: 2px solid var(--md-sys-color-primary);
+    background-color: rgba(231, 224, 236, 0.5);
+}
+
+.btn {
+    background: var(--md-sys-color-primary);
+    color: var(--md-sys-color-on-primary);
+    border: none;
+    padding: 16px 32px;
+    border-radius: var(--shape-corner-full);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s var(--motion-easing-standard);
+    width: 100%;
+    font-weight: 500;
+    box-shadow: var(--shadow-1);
+    margin-top: 8px;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn:hover {
+    box-shadow: var(--shadow-2);
+    transform: translateY(-1px);
+    background-image: linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.08));
+}
+
+.btn:active {
+    transform: translateY(0);
+    box-shadow: var(--shadow-1);
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    background: var(--md-sys-color-outline);
+    color: var(--on-surface-variant);
+}
+
+.error-message {
+    background: var(--md-sys-color-error-container);
+    color: var(--md-sys-color-on-error-container);
+    padding: 16px;
+    border-radius: var(--shape-corner-medium);
+    margin-bottom: 24px;
+    display: none;
+    animation: shake 0.4s var(--motion-easing-emphasized);
+    border-left: 4px solid var(--md-sys-color-error);
+}
+
+@keyframes shake {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    25% {
+        transform: translateX(-10px);
+    }
+
+    75% {
+        transform: translateX(10px);
+    }
+}
+
+.auth-footer {
+    text-align: center;
+    margin-top: 24px;
+    color: var(--on-surface-variant);
+    font-size: 0.938rem;
+}
+
+.auth-footer a {
+    color: var(--md-sys-color-primary);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.2s var(--motion-easing-standard);
+}
+
+.auth-footer a:hover {
+    color: var(--md-sys-color-primary-container);
+    text-decoration: underline;
+}
+
+@media (max-width: 640px) {
+    .auth-container {
+        padding: 32px 24px;
+        border-radius: var(--shape-corner-large);
+    }
+
+    .auth-header h1 {
+        font-size: 2rem;
+    }
+
+    body {
+        padding: 16px;
+    }
+}

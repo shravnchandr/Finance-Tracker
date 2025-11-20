@@ -1,0 +1,30 @@
+[Unit]
+Description=Finance Tracker Gunicorn Service
+After=network.target
+
+[Service]
+# Adjust User and Group if you are not using the default 'pi' user
+User=pi
+Group=pi
+
+# Adjust the working directory to where you cloned the repo
+WorkingDirectory=/home/pi/finance-tracker
+
+# Environment variables
+# PATH should include the venv bin directory
+Environment="PATH=/home/pi/finance-tracker/.venv/bin"
+Environment="PORT=8000"
+Environment="DEBUG=False"
+# Generate a secure key for production: python -c 'import secrets; print(secrets.token_hex())'
+Environment="FLASK_SECRET_KEY=change_this_to_a_secure_random_string"
+
+# Start Gunicorn
+# -w 4: 4 worker processes (adjust based on Pi model, 2-4 is usually good)
+# -b 0.0.0.0:8000: Bind to all interfaces on port 8000
+ExecStart=/home/pi/finance-tracker/.venv/bin/gunicorn -w 4 -b 0.0.0.0:8000 run:app
+
+# Restart automatically if it crashes
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

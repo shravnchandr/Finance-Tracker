@@ -1,0 +1,36 @@
+<div id="calendarSection" class="nav-content">
+    <div class="calendar-header">
+        <button class="btn-small" onclick="changeMonth(-1)">Previous</button>
+        <h2 id="calendarMonthYear">Month Year</h2>
+        <button class="btn-small" onclick="changeMonth(1)">Next</button>
+    </div>
+    <div class="calendar-grid" id="calendarGrid">
+        <!-- Calendar days will be generated here -->
+    </div>
+    <div class="card" style="margin-top: 20px;">
+        <h3>Add Event</h3>
+        <form id="eventForm">
+            <div class="form-group">
+                <label>Title</label>
+                <input type="text" id="eventTitle" required>
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="eventDescription" rows="2"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Start Date</label>
+                <input type="date" id="eventStart" required>
+            </div>
+            <div class="form-group">
+                <label>End Date</label>
+                <input type="date" id="eventEnd">
+            </div>
+            <div class="form-group">
+                <label>Color</label>
+                <input type="color" id="eventColor" value="#3b82f6">
+            </div>
+            <button type="submit" class="btn">Add Event</button>
+        </form>
+    </div>
+</div>

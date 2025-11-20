@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% include 'partials/dashboard.html' %}
+{% include 'partials/calendar.html' %}
+{% include 'partials/reminders.html' %}
+{% include 'partials/notes.html' %}
+{% if role == 'admin' %}
+{% include 'partials/categories.html' %}
+{% endif %}
+{% include 'partials/modals.html' %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/modules/categories.js') }}"></script>
+<script src="{{ url_for('static', filename='js/modules/dashboard.js') }}"></script>
+<script src="{{ url_for('static', filename='js/modules/calendar.js') }}"></script>
+<script src="{{ url_for('static', filename='js/modules/reminders.js') }}"></script>
+<script src="{{ url_for('static', filename='js/modules/notes.js') }}"></script>
+<script>
+    // Initialize application
+    document.addEventListener('DOMContentLoaded', () => {
+        loadCategories().then(() => {
+            updateCategoryOptions();
+            loadTransactions();
+            if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'admin') {
+                loadStats();
+                loadCategoryStats();
+            }
+        });
+    });
+</script>
+{% endblock %}

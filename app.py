@@ -57,6 +57,40 @@ def init_db():
                   icon TEXT,
                   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
     
+    # Notes table
+    c.execute('''CREATE TABLE IF NOT EXISTS notes
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_id INTEGER NOT NULL,
+                  title TEXT NOT NULL,
+                  content TEXT,
+                  color TEXT DEFAULT '#ffffff',
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  FOREIGN KEY (user_id) REFERENCES users (id))''')
+
+    # Reminders table
+    c.execute('''CREATE TABLE IF NOT EXISTS reminders
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_id INTEGER NOT NULL,
+                  title TEXT NOT NULL,
+                  description TEXT,
+                  due_date TIMESTAMP,
+                  is_completed BOOLEAN DEFAULT 0,
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  FOREIGN KEY (user_id) REFERENCES users (id))''')
+
+    # Calendar Events table
+    c.execute('''CREATE TABLE IF NOT EXISTS calendar_events
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_id INTEGER NOT NULL,
+                  title TEXT NOT NULL,
+                  description TEXT,
+                  start_time TIMESTAMP NOT NULL,
+                  end_time TIMESTAMP,
+                  color TEXT DEFAULT '#3b82f6',
+                  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                  FOREIGN KEY (user_id) REFERENCES users (id))''')
+    
     # Insert default categories if table is empty
     c.execute('SELECT COUNT(*) FROM categories')
     if c.fetchone()[0] == 0:
@@ -670,6 +704,207 @@ def delete_attachment(transaction_id):
     
     return jsonify({'message': 'Attachment deleted successfully'})
 
+# Notes Routes
+@app.route('/api/notes', methods=['GET'])
+@login_required
+def get_notes():
+    user_id = session['user_id']
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT * FROM notes WHERE user_id = ? ORDER BY updated_at DESC', (user_id,))
+    notes = [dict(row) for row in c.fetchall()]
+    conn.close()
+    return jsonify(notes)
+
+@app.route('/api/notes', methods=['POST'])
+@login_required
+def add_note():
+    user_id = session['user_id']
+    data = request.json
+    title = data.get('title')
+    content = data.get('content', '')
+    color = data.get('color', '#ffffff')
+    
+    if not title:
+        return jsonify({'error': 'Title is required'}), 400
+        
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('INSERT INTO notes (user_id, title, content, color) VALUES (?, ?, ?, ?)',
+              (user_id, title, content, color))
+    conn.commit()
+    note_id = c.lastrowid
+    conn.close()
+    return jsonify({'id': note_id, 'message': 'Note added successfully'}), 201
+
+@app.route('/api/notes/<int:note_id>', methods=['PUT'])
+@login_required
+def update_note(note_id):
+    user_id = session['user_id']
+    data = request.json
+    title = data.get('title')
+    content = data.get('content', '')
+    color = data.get('color', '#ffffff')
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''UPDATE notes 
+                 SET title = ?, content = ?, color = ?, updated_at = CURRENT_TIMESTAMP 
+                 WHERE id = ? AND user_id = ?''',
+              (title, content, color, note_id, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Note updated successfully'})
+
+@app.route('/api/notes/<int:note_id>', methods=['DELETE'])
+@login_required
+def delete_note(note_id):
+    user_id = session['user_id']
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('DELETE FROM notes WHERE id = ? AND user_id = ?', (note_id, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Note deleted successfully'})
+
+# Reminders Routes
+@app.route('/api/reminders', methods=['GET'])
+@login_required
+def get_reminders():
+    user_id = session['user_id']
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT * FROM reminders WHERE user_id = ? ORDER BY due_date ASC', (user_id,))
+    reminders = [dict(row) for row in c.fetchall()]
+    conn.close()
+    return jsonify(reminders)
+
+@app.route('/api/reminders', methods=['POST'])
+@login_required
+def add_reminder():
+    user_id = session['user_id']
+    data = request.json
+    title = data.get('title')
+    description = data.get('description', '')
+    due_date = data.get('due_date')
+    
+    if not title:
+        return jsonify({'error': 'Title is required'}), 400
+        
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('INSERT INTO reminders (user_id, title, description, due_date) VALUES (?, ?, ?, ?)',
+              (user_id, title, description, due_date))
+    conn.commit()
+    reminder_id = c.lastrowid
+    conn.close()
+    return jsonify({'id': reminder_id, 'message': 'Reminder added successfully'}), 201
+
+@app.route('/api/reminders/<int:reminder_id>', methods=['PUT'])
+@login_required
+def update_reminder(reminder_id):
+    user_id = session['user_id']
+    data = request.json
+    
+    conn = get_db()
+    c = conn.cursor()
+    
+    # Check if it's just a toggle completion update
+    if 'is_completed' in data and len(data) == 1:
+        c.execute('UPDATE reminders SET is_completed = ? WHERE id = ? AND user_id = ?',
+                  (data['is_completed'], reminder_id, user_id))
+    else:
+        title = data.get('title')
+        description = data.get('description', '')
+        due_date = data.get('due_date')
+        c.execute('''UPDATE reminders 
+                     SET title = ?, description = ?, due_date = ? 
+                     WHERE id = ? AND user_id = ?''',
+                  (title, description, due_date, reminder_id, user_id))
+                  
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Reminder updated successfully'})
+
+@app.route('/api/reminders/<int:reminder_id>', methods=['DELETE'])
+@login_required
+def delete_reminder(reminder_id):
+    user_id = session['user_id']
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('DELETE FROM reminders WHERE id = ? AND user_id = ?', (reminder_id, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Reminder deleted successfully'})
+
+# Calendar Events Routes
+@app.route('/api/calendar/events', methods=['GET'])
+@login_required
+def get_calendar_events():
+    user_id = session['user_id']
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT * FROM calendar_events WHERE user_id = ?', (user_id,))
+    events = [dict(row) for row in c.fetchall()]
+    conn.close()
+    return jsonify(events)
+
+@app.route('/api/calendar/events', methods=['POST'])
+@login_required
+def add_calendar_event():
+    user_id = session['user_id']
+    data = request.json
+    title = data.get('title')
+    description = data.get('description', '')
+    start_time = data.get('start_time')
+    end_time = data.get('end_time')
+    color = data.get('color', '#3b82f6')
+    
+    if not title or not start_time:
+        return jsonify({'error': 'Title and start time are required'}), 400
+        
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''INSERT INTO calendar_events (user_id, title, description, start_time, end_time, color) 
+                 VALUES (?, ?, ?, ?, ?, ?)''',
+              (user_id, title, description, start_time, end_time, color))
+    conn.commit()
+    event_id = c.lastrowid
+    conn.close()
+    return jsonify({'id': event_id, 'message': 'Event added successfully'}), 201
+
+@app.route('/api/calendar/events/<int:event_id>', methods=['PUT'])
+@login_required
+def update_calendar_event(event_id):
+    user_id = session['user_id']
+    data = request.json
+    title = data.get('title')
+    description = data.get('description', '')
+    start_time = data.get('start_time')
+    end_time = data.get('end_time')
+    color = data.get('color', '#3b82f6')
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('''UPDATE calendar_events 
+                 SET title = ?, description = ?, start_time = ?, end_time = ?, color = ? 
+                 WHERE id = ? AND user_id = ?''',
+              (title, description, start_time, end_time, color, event_id, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Event updated successfully'})
+
+@app.route('/api/calendar/events/<int:event_id>', methods=['DELETE'])
+@login_required
+def delete_calendar_event(event_id):
+    user_id = session['user_id']
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('DELETE FROM calendar_events WHERE id = ? AND user_id = ?', (event_id, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Event deleted successfully'})
+
 if __name__ == '__main__':
-    app.run(debug=True, port=8080)
-    # app.run(host='0.0.0.0', port=8080)
+    # app.run(debug=True, port=8080)
+    app.run(host='0.0.0.0', port=8080)

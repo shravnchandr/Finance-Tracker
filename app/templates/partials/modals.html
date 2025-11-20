@@ -1,0 +1,44 @@
+<div id="noteModal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <span class="close" onclick="closeNoteModal()">&times;</span>
+        <h3 id="noteModalTitle">Add Note</h3>
+        <form id="noteForm">
+            <input type="hidden" id="noteId">
+            <div class="form-group">
+                <label>Title</label>
+                <input type="text" id="noteTitleInput" required>
+            </div>
+            <div class="form-group">
+                <label>Content</label>
+                <textarea id="noteContentInput" rows="5"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Color</label>
+                <div class="color-picker">
+                    <div class="color-option" style="background: #ffffff;" onclick="selectNoteColor('#ffffff')">
+                    </div>
+                    <div class="color-option" style="background: #f28b82;" onclick="selectNoteColor('#f28b82')">
+                    </div>
+                    <div class="color-option" style="background: #fbbc04;" onclick="selectNoteColor('#fbbc04')">
+                    </div>
+                    <div class="color-option" style="background: #fff475;" onclick="selectNoteColor('#fff475')">
+                    </div>
+                    <div class="color-option" style="background: #ccff90;" onclick="selectNoteColor('#ccff90')">
+                    </div>
+                    <div class="color-option" style="background: #a7ffeb;" onclick="selectNoteColor('#a7ffeb')">
+                    </div>
+                    <div class="color-option" style="background: #cbf0f8;" onclick="selectNoteColor('#cbf0f8')">
+                    </div>
+                    <div class="color-option" style="background: #aecbfa;" onclick="selectNoteColor('#aecbfa')">
+                    </div>
+                    <div class="color-option" style="background: #d7aefb;" onclick="selectNoteColor('#d7aefb')">
+                    </div>
+                    <div class="color-option" style="background: #fdcfe8;" onclick="selectNoteColor('#fdcfe8')">
+                    </div>
+                </div>
+                <input type="hidden" id="noteColor" value="#ffffff">
+            </div>
+            <button type="submit" class="btn">Save Note</button>
+        </form>
+    </div>
+</div>

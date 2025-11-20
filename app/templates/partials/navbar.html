@@ -1,0 +1,9 @@
+<div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchNavTab('dashboard')">Dashboard</button>
+    <button class="nav-tab" onclick="switchNavTab('calendar')">Calendar</button>
+    <button class="nav-tab" onclick="switchNavTab('reminders')">Reminders</button>
+    <button class="nav-tab" onclick="switchNavTab('notes')">Notes</button>
+    {% if role == 'admin' %}
+    <button class="nav-tab" onclick="switchNavTab('categories')">Categories</button>
+    {% endif %}
+</div>

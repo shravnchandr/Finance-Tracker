@@ -1,256 +1,134 @@
-// const USER_ROLE = "{{ role }}";
-const USER_ROLE = document.body.getAttribute('user-role');
-
-let expenseCategories = [];
-let incomeCategories = [];
-
 let editingTransactionId = null;
 let currentType = 'expense';
 let currentAttachmentPath = null;
 
 // Hide stats and download button for regular users
-if (USER_ROLE === 'user') {
-    document.getElementById('dashboardStats').classList.add('hidden');
-    document.getElementById('downloadBtn').classList.add('hidden');
-} else {
-    // Show category manager for admins
-    document.getElementById('dashboardStats').classList.add('hidden');
-    document.getElementById('categoryManager').style.display = 'block';
-    document.getElementById('categoryStats').style.display = 'block';
+if (typeof USER_ROLE !== 'undefined') {
+    if (USER_ROLE === 'user') {
+        const stats = document.getElementById('dashboardStats');
+        if (stats) stats.classList.add('hidden');
+        const dlBtn = document.getElementById('downloadBtn');
+        if (dlBtn) dlBtn.classList.add('hidden');
+    } else {
+        // Show category stats for admins
+        const stats = document.getElementById('dashboardStats');
+        if (stats) stats.classList.add('hidden');
+        const catStats = document.getElementById('categoryStats');
+        if (catStats) catStats.style.display = 'block';
+    }
 }
 
 // Set today's date as default
-document.getElementById('date').valueAsDate = new Date();
-
-// Load categories first, then other data
-loadCategories().then(() => {
-    updateCategoryOptions();
-    loadTransactions();
-    if (USER_ROLE === 'admin') {
-        loadStats();
-        loadCategoryStats();
-    }
-});
+const dateInput = document.getElementById('date');
+if (dateInput) {
+    dateInput.valueAsDate = new Date();
+}
 
 function selectType(type) {
     currentType = type;
     document.getElementById('transactionType').value = type;
-    
+
     document.querySelectorAll('.type-option').forEach(opt => {
         opt.classList.remove('active');
     });
-    
+
     const clickedElement = event.target.closest('.type-option');
     if (clickedElement) {
         clickedElement.classList.add('active');
     }
-    updateCategoryOptions();
-}
-
-async function loadCategories() {
-    try {
-        const response = await fetch('/api/categories');
-        const categories = await response.json();
-        
-        expenseCategories = categories
-            .filter(cat => cat.type === 'expense')
-            .map(cat => cat.name);
-        
-        incomeCategories = categories
-            .filter(cat => cat.type === 'income')
-            .map(cat => cat.name);
-        
-        // Update category manager display for admins
-        if (USER_ROLE === 'admin') {
-            displayCategoriesInManager(categories);
-        }
-    } catch (error) {
-        console.error('Error loading categories:', error);
+    if (typeof updateCategoryOptions === 'function') {
+        updateCategoryOptions();
     }
-}
-
-function displayCategoriesInManager(categories) {
-    const expenseList = document.getElementById('expenseCategoryList');
-    const incomeList = document.getElementById('incomeCategoryList');
-    
-    const expenseCats = categories.filter(cat => cat.type === 'expense');
-    const incomeCats = categories.filter(cat => cat.type === 'income');
-    
-    expenseList.innerHTML = expenseCats.map(cat => `
-        <div class="category-item">
-            <div>
-                <span class="cat-name">${cat.name}</span>
-            </div>
-            <button class="btn-delete-cat" onclick="deleteCategory(${cat.id}, '${cat.name.replace(/'/g, "\\'")}')">Delete</button>
-        </div>
-    `).join('');
-    
-    incomeList.innerHTML = incomeCats.map(cat => `
-        <div class="category-item">
-            <div>
-                <span class="cat-name">${cat.name}</span>
-            </div>
-            <button class="btn-delete-cat" onclick="deleteCategory(${cat.id}, '${cat.name.replace(/'/g, "\\'")}')">Delete</button>
-        </div>
-    `).join('');
-}
-
-async function addCategory() {
-    const name = document.getElementById('newCategoryName').value.trim();
-    const icon = document.getElementById('newCategoryIcon').value.trim();
-    const type = document.getElementById('newCategoryType').value;
-    
-    if (!name) {
-        alert('Please enter a category name');
-        return;
-    }
-    
-    const fullName = icon ? `${icon} ${name}` : name;
-    
-    try {
-        const response = await fetch('/api/categories', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: fullName, type: type, icon: icon })
-        });
-        
-        if (response.ok) {
-            document.getElementById('newCategoryName').value = '';
-            document.getElementById('newCategoryIcon').value = '';
-            await loadCategories();
-            updateCategoryOptions();
-        } else {
-            const error = await response.json();
-            alert(error.error || 'Failed to add category');
-        }
-    } catch (error) {
-        alert('Error adding category');
-    }
-}
-
-async function deleteCategory(id, name) {
-    if (!confirm(`Delete category "${name}"?\n\nNote: You can only delete categories that are not in use.`)) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/api/categories/${id}`, {
-            method: 'DELETE'
-        });
-        
-        if (response.ok) {
-            await loadCategories();
-            updateCategoryOptions();
-        } else {
-            const error = await response.json();
-            alert(error.error || 'Failed to delete category');
-        }
-    } catch (error) {
-        alert('Error deleting category');
-    }
-}
-
-function updateCategoryOptions() {
-    const categorySelect = document.getElementById('category');
-    const categories = currentType === 'expense' ? expenseCategories : incomeCategories;
-    
-    categorySelect.innerHTML = '<option value="">Select Category</option>';
-    categories.forEach(cat => {
-        const option = document.createElement('option');
-        option.value = cat;
-        option.textContent = cat;
-        categorySelect.appendChild(option);
-    });
-
-    // Update filter category options with ALL categories
-    const filterCategory = document.getElementById('filterCategory');
-    filterCategory.innerHTML = '<option value="all">All Categories</option>';
-    [...expenseCategories, ...incomeCategories].forEach(cat => {
-        const option = document.createElement('option');
-        option.value = cat;
-        option.textContent = cat;
-        filterCategory.appendChild(option);
-    });
 }
 
 // Form submission
-document.getElementById('transactionForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const transType = document.getElementById('transactionType').value;
-    const amount = document.getElementById('amount').value;
-    const category = document.getElementById('category').value;
-    const description = document.getElementById('description').value;
-    const date = document.getElementById('date').value;
-    const attachment = document.getElementById('attachment').files[0];
+const transactionForm = document.getElementById('transactionForm');
+if (transactionForm) {
+    transactionForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
 
-    if (!amount || !category || !date) {
-        alert('Please fill in all required fields');
-        return;
-    }
-    
-    // Create FormData for file upload
-    const formData = new FormData();
-    formData.append('amount', amount);
-    formData.append('type', transType);
-    formData.append('category', category);
-    formData.append('description', description);
-    formData.append('date', date);
-    
-    if (attachment) {
-        formData.append('attachment', attachment);
-    }
+        const transType = document.getElementById('transactionType').value;
+        const amount = document.getElementById('amount').value;
+        const category = document.getElementById('category').value;
+        const description = document.getElementById('description').value;
+        const date = document.getElementById('date').value;
+        const attachment = document.getElementById('attachment').files[0];
 
-    try {
-        let response;
-        if (editingTransactionId) {
-            response = await fetch(`/api/transactions/${editingTransactionId}`, {
-                method: 'PUT',
-                body: formData
-            });
-        } else {
-            response = await fetch('/api/transactions', {
-                method: 'POST',
-                body: formData
-            });
+        if (!amount || !category || !date) {
+            alert('Please fill in all required fields');
+            return;
         }
 
-        if (response.ok) {
-            editingTransactionId = null;
-            currentAttachmentPath = null;
-            document.getElementById('transactionForm').reset();
-            document.getElementById('date').valueAsDate = new Date();
-            document.getElementById('transactionType').value = 'expense';
-            document.getElementById('currentAttachment').style.display = 'none';
-            currentType = 'expense';
-            
-            document.querySelectorAll('.type-option').forEach(opt => opt.classList.remove('active'));
-            document.querySelector('.type-option.expense').classList.add('active');
-            
-            document.querySelector('.btn').textContent = 'Add Transaction';
-            document.getElementById('formTitle').textContent = 'Add Transaction';
-            
-            updateCategoryOptions();
-            await loadTransactions();
-            if (USER_ROLE === 'admin') {
-                await loadStats();
-                await loadCategoryStats();
+        // Create FormData for file upload
+        const formData = new FormData();
+        formData.append('amount', amount);
+        formData.append('type', transType);
+        formData.append('category', category);
+        formData.append('description', description);
+        formData.append('date', date);
+
+        if (attachment) {
+            formData.append('attachment', attachment);
+        }
+
+        try {
+            let response;
+            if (editingTransactionId) {
+                response = await fetch(`/api/transactions/${editingTransactionId}`, {
+                    method: 'PUT',
+                    body: formData
+                });
+            } else {
+                response = await fetch('/api/transactions', {
+                    method: 'POST',
+                    body: formData
+                });
             }
-        } else {
-            const errorData = await response.json();
-            alert('Error: ' + (errorData.error || 'Failed to save transaction'));
+
+            if (response.ok) {
+                editingTransactionId = null;
+                currentAttachmentPath = null;
+                document.getElementById('transactionForm').reset();
+                document.getElementById('date').valueAsDate = new Date();
+                document.getElementById('transactionType').value = 'expense';
+                document.getElementById('currentAttachment').style.display = 'none';
+                currentType = 'expense';
+
+                document.querySelectorAll('.type-option').forEach(opt => opt.classList.remove('active'));
+                document.querySelector('.type-option.expense').classList.add('active');
+
+                document.querySelector('.btn').textContent = 'Add Transaction';
+                document.getElementById('formTitle').textContent = 'Add Transaction';
+
+                if (typeof updateCategoryOptions === 'function') updateCategoryOptions();
+                await loadTransactions();
+                if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'admin') {
+                    await loadStats();
+                    await loadCategoryStats();
+                }
+            } else {
+                const errorData = await response.json();
+                alert('Error: ' + (errorData.error || 'Failed to save transaction'));
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Error saving transaction. Please try again.');
         }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('Error saving transaction. Please try again.');
-    }
-});
+    });
+}
 
 // Filter listeners
-document.getElementById('filterType').addEventListener('change', loadTransactions);
-document.getElementById('filterCategory').addEventListener('change', loadTransactions);
-document.getElementById('startDate').addEventListener('change', loadTransactions);
-document.getElementById('endDate').addEventListener('change', loadTransactions);
+const filterType = document.getElementById('filterType');
+if (filterType) filterType.addEventListener('change', loadTransactions);
+
+const filterCategory = document.getElementById('filterCategory');
+if (filterCategory) filterCategory.addEventListener('change', loadTransactions);
+
+const startDate = document.getElementById('startDate');
+if (startDate) startDate.addEventListener('change', loadTransactions);
+
+const endDate = document.getElementById('endDate');
+if (endDate) endDate.addEventListener('change', loadTransactions);
 
 async function loadTransactions() {
     const type = document.getElementById('filterType').value;
@@ -268,7 +146,8 @@ async function loadTransactions() {
     const transactions = await response.json();
 
     const transactionList = document.getElementById('transactionList');
-    
+    if (!transactionList) return;
+
     if (transactions.length === 0) {
         transactionList.innerHTML = '<div class="empty-state"><p>No transactions found</p></div>';
         return;
@@ -286,12 +165,12 @@ async function loadTransactions() {
             attachment_filename: trans.attachment_filename,
             attachment_path: trans.attachment_path
         };
-        
-        const userBadge = USER_ROLE === 'admin' ? `<span class="user-badge">${trans.username}</span>` : '';
-        
-        const attachmentBadge = trans.attachment_filename ? 
+
+        const userBadge = (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'admin') ? `<span class="user-badge">${trans.username}</span>` : '';
+
+        const attachmentBadge = trans.attachment_filename ?
             `<span class="attachment-badge" onclick="viewAttachment('${trans.attachment_path}', '${trans.attachment_filename}')" title="View attachment">📎 ${trans.attachment_filename}</span>` : '';
-        
+
         return `
         <div class="transaction-item ${trans.type}">
             <div class="transaction-info">
@@ -322,7 +201,7 @@ async function loadStats() {
     try {
         const response = await fetch('/api/stats');
         if (!response.ok) return;
-        
+
         const stats = await response.json();
 
         document.getElementById('totalIncome').textContent = `₹${stats.total_income.toFixed(2)}`;
@@ -341,12 +220,12 @@ function editTransaction(trans) {
     editingTransactionId = trans.id;
     currentType = trans.type;
     currentAttachmentPath = trans.attachment_path;
-    
+
     document.getElementById('amount').value = trans.amount;
     document.getElementById('transactionType').value = trans.type;
     document.getElementById('description').value = trans.description || '';
     document.getElementById('date').value = trans.date;
-    
+
     // Show current attachment if exists
     if (trans.attachment_filename) {
         document.getElementById('currentAttachment').style.display = 'block';
@@ -354,16 +233,16 @@ function editTransaction(trans) {
     } else {
         document.getElementById('currentAttachment').style.display = 'none';
     }
-    
+
     document.querySelectorAll('.type-option').forEach(opt => opt.classList.remove('active'));
     document.querySelector(`.type-option.${trans.type}`).classList.add('active');
-    
-    updateCategoryOptions();
-    
+
+    if (typeof updateCategoryOptions === 'function') updateCategoryOptions();
+
     setTimeout(() => {
         document.getElementById('category').value = trans.category;
     }, 100);
-    
+
     document.querySelector('.btn').textContent = 'Update Transaction';
     document.getElementById('formTitle').textContent = 'Edit Transaction';
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -377,14 +256,14 @@ function viewAttachment(path, filename) {
 
 async function removeAttachment() {
     if (!editingTransactionId) return;
-    
+
     if (!confirm('Remove attachment from this transaction?')) return;
-    
+
     try {
         const response = await fetch(`/api/transactions/${editingTransactionId}/attachment`, {
             method: 'DELETE'
         });
-        
+
         if (response.ok) {
             document.getElementById('currentAttachment').style.display = 'none';
             currentAttachmentPath = null;
@@ -403,7 +282,7 @@ async function deleteTransaction(id) {
             const response = await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
             if (response.ok) {
                 loadTransactions();
-                if (USER_ROLE === 'admin') {
+                if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'admin') {
                     loadStats();
                     loadCategoryStats();
                 }
@@ -431,18 +310,11 @@ async function downloadCSV() {
     window.location.href = url;
 }
 
-function logout() {
-    if (confirm('Are you sure you want to logout?')) {
-        window.location.href = '/logout';
-    }
-}
-
-
 function switchStatsTab(tab) {
     // Update tab buttons
     document.querySelectorAll('.stats-tab').forEach(btn => btn.classList.remove('active'));
     event.target.classList.add('active');
-    
+
     // Update content
     document.querySelectorAll('.stats-content').forEach(content => content.classList.remove('active'));
     document.getElementById(tab + 'StatsContent').classList.add('active');
@@ -452,18 +324,18 @@ async function loadCategoryStats() {
     try {
         const response = await fetch('/api/stats');
         if (!response.ok) return;
-        
+
         const stats = await response.json();
-        
+
         // Display expense category stats
         displayCategoryStats(stats.expense_by_category, 'expense', stats.total_expenses);
-        
+
         // Display income category stats
         displayCategoryStats(stats.income_by_category, 'income', stats.total_income);
-        
+
         // Display comparison
         displayComparison(stats.expense_by_category, stats.income_by_category, stats.total_expenses, stats.total_income);
-        
+
     } catch (error) {
         console.error('Error loading category stats:', error);
     }
@@ -472,15 +344,16 @@ async function loadCategoryStats() {
 function displayCategoryStats(categories, type, total) {
     const gridId = type === 'expense' ? 'expenseStatsGrid' : 'incomeStatsGrid';
     const grid = document.getElementById(gridId);
-    
+    if (!grid) return;
+
     if (!categories || categories.length === 0) {
         grid.innerHTML = `<div class="no-data">No ${type} data available</div>`;
         return;
     }
-    
+
     grid.innerHTML = categories.map(cat => {
         const percentage = total > 0 ? ((cat.total / total) * 100).toFixed(1) : 0;
-        
+
         return `
             <div class="category-stat-card ${type}">
                 <div class="category-stat-header">
@@ -500,10 +373,11 @@ function displayCategoryStats(categories, type, total) {
 
 function displayComparison(expenseCategories, incomeCategories, totalExpenses, totalIncome) {
     const grid = document.getElementById('comparisonGrid');
-    
+    if (!grid) return;
+
     const balance = totalIncome - totalExpenses;
     const savingsRate = totalIncome > 0 ? ((balance / totalIncome) * 100).toFixed(1) : 0;
-    
+
     let html = `
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px;">
             <div class="stat-card income">
@@ -527,7 +401,7 @@ function displayComparison(expenseCategories, incomeCategories, totalExpenses, t
         <h3 style="margin-bottom: 16px; color: var(--on-surface); font-weight: 500;">Top Spending Categories</h3>
         <div class="category-stats-grid">
     `;
-    
+
     const topExpenses = expenseCategories.slice(0, 6);
     html += topExpenses.map(cat => {
         const percentage = totalExpenses > 0 ? ((cat.total / totalExpenses) * 100).toFixed(1) : 0;
@@ -546,12 +420,12 @@ function displayComparison(expenseCategories, incomeCategories, totalExpenses, t
             </div>
         `;
     }).join('');
-    
+
     html += '</div>';
-    
+
     html += '<h3 style="margin: 32px 0 16px; color: var(--on-surface); font-weight: 500;">Top Income Sources</h3>';
     html += '<div class="category-stats-grid">';
-    
+
     const topIncome = incomeCategories.slice(0, 6);
     html += topIncome.map(cat => {
         const percentage = totalIncome > 0 ? ((cat.total / totalIncome) * 100).toFixed(1) : 0;
@@ -570,8 +444,15 @@ function displayComparison(expenseCategories, incomeCategories, totalExpenses, t
             </div>
         `;
     }).join('');
-    
+
     html += '</div>';
-    
+
+
     grid.innerHTML = html;
+}
+
+function logout() {
+    if (confirm('Are you sure you want to logout?')) {
+        window.location.href = '/logout';
+    }
 }
